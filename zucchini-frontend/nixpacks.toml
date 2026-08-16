@@ -1,0 +1,12 @@
+# Railway uses Nixpacks. Install Caddy so we can serve the Vite build as an SPA.
+[phases.setup]
+nixPkgs = ["caddy", "nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci || npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "caddy run --config /app/Caddyfile --adapter caddyfile"

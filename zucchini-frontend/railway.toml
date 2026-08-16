@@ -1,0 +1,12 @@
+# Railway service config for zucchini-frontend (Vite SPA served by Caddy)
+# In Railway dashboard set:
+#   Root Directory = zucchini-frontend
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+# startCommand is defined in nixpacks.toml; override here only if needed
+healthcheckPath = "/"
+healthcheckTimeout = 15
+restartPolicyType = "on_failure"

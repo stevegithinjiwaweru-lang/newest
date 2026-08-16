@@ -1,0 +1,15 @@
+# Railway service config for zucchini-backend
+# Place this file in the backend folder. In Railway dashboard set:
+#   Root Directory = zucchini-backend
+#   (or the path where this package lives in your repo)
+
+[build]
+builder = "nixpacks"
+buildCommand = "npm install --include=dev && npm run build"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
