@@ -130,14 +130,18 @@ export const callback = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "Invalid HMAC on OAuth callback");
   }
 
+  // Request an *expiring* offline access token (required for public apps).
+  // Without expiring=1 Shopify returns a legacy non-expiring token that the
+  // Admin API rejects with 403 for new public apps.
   const tokenUrl = `https://${shop}/admin/oauth/access_token`;
   const resp = await fetch(tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       client_id: env.shopifyClientId,
       client_secret: env.shopifyClientSecret,
       code,
+      expiring: 1,
     }),
   });
 
@@ -152,27 +156,51 @@ export const callback = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(502, "Shopify access token missing in response");
   }
 
-  // Encrypt token — never log access_token
+  if (!tokenBody.refresh_token || !tokenBody.expires_in) {
+    // Soft warning: some app configurations may still return non-expiring tokens.
+    // Admin API calls will fail for public apps until expiring tokens are used.
+    console.warn("Shopify token response missing refresh_token/expires_in — ensure the app requests expiring offline tokens", {
+      shop,
+      hasRefresh: Boolean(tokenBody.refresh_token),
+      expiresIn: tokenBody.expires_in ?? null,
+    });
+  }
+
+  // Encrypt tokens — never log access_token or refresh_token
   const encrypted = encryptSecret(tokenBody.access_token);
+  const refreshEnc = tokenBody.refresh_token ? encryptSecret(tokenBody.refresh_token) : null;
+  const now = Date.now();
+  const accessExpiresAt =
+    typeof tokenBody.expires_in === "number"
+      ? new Date(now + tokenBody.expires_in * 1000)
+      : null;
+  const refreshExpiresAt =
+    typeof tokenBody.refresh_token_expires_in === "number"
+      ? new Date(now + tokenBody.refresh_token_expires_in * 1000)
+      : null;
+
+  const tokenFields = {
+    shopifyAccessTokenEnc: encrypted,
+    shopifyAccessTokenExpiresAt: accessExpiresAt,
+    shopifyRefreshTokenEnc: refreshEnc,
+    shopifyRefreshTokenExpiresAt: refreshExpiresAt,
+    shopifyShopDomain: shop,
+    status: "CONNECTED" as const,
+  };
+
   let merchant = await prisma.merchant.findFirst({ where: { shopifyShopDomain: shop } });
   if (!merchant) {
     merchant = await prisma.merchant.create({
       data: {
         name: shop,
         connector: "API",
-        status: "CONNECTED",
-        shopifyShopDomain: shop,
-        shopifyAccessTokenEnc: encrypted,
+        ...tokenFields,
       },
     });
   } else {
     merchant = await prisma.merchant.update({
       where: { id: merchant.id },
-      data: {
-        shopifyAccessTokenEnc: encrypted,
-        shopifyShopDomain: shop,
-        status: "CONNECTED",
-      },
+      data: tokenFields,
     });
   }
 

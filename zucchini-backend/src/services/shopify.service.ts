@@ -1,10 +1,10 @@
 import { prisma } from "../lib/prisma";
-import { decryptSecret } from "../utils/crypto";
 import { ApiError } from "../utils/asyncHandler";
 import { getIO } from "../socket";
 import { OrderStatus } from "../types/enums";
 import { env } from "../config/env";
 import { ShopifyOrderPayload } from "../types/shopify";
+import { getValidShopifyAccessToken } from "./shopify.token";
 
 const SHOPIFY_API_VERSION = "2024-10";
 
@@ -483,6 +483,9 @@ export async function backfillRecentOrders(
     id: string;
     shopifyShopDomain: string | null;
     shopifyAccessTokenEnc: string | null;
+    shopifyAccessTokenExpiresAt?: Date | null;
+    shopifyRefreshTokenEnc?: string | null;
+    shopifyRefreshTokenExpiresAt?: Date | null;
   }
 ) {
   if (
@@ -496,12 +499,16 @@ export async function backfillRecentOrders(
   }
 
   /**
-   * Decrypt stored Shopify Admin API access token.
+   * Obtain a valid (refreshed if needed) Shopify Admin API access token.
    */
-  const accessToken =
-    decryptSecret(
-      merchant.shopifyAccessTokenEnc
-    );
+  const accessToken = await getValidShopifyAccessToken({
+    id: merchant.id,
+    shopifyShopDomain: merchant.shopifyShopDomain,
+    shopifyAccessTokenEnc: merchant.shopifyAccessTokenEnc,
+    shopifyAccessTokenExpiresAt: merchant.shopifyAccessTokenExpiresAt ?? null,
+    shopifyRefreshTokenEnc: merchant.shopifyRefreshTokenEnc ?? null,
+    shopifyRefreshTokenExpiresAt: merchant.shopifyRefreshTokenExpiresAt ?? null,
+  });
 
   /**
    * Fetch recent Shopify orders.
