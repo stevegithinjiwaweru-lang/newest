@@ -257,6 +257,47 @@ app.get("/health", (_req, res) => {
 
 /**
  * ============================================================
+ * ROOT / SHOPIFY EMBEDDED ENTRY
+ * ============================================================
+ *
+ * Shopify Admin (embedded apps / App Bridge) often loads the
+ * App URL as GET /?hmac=...&host=...&session=...&shop=...&timestamp=...
+ *
+ * Without a handler this returns 404. We accept the request and
+ * either redirect to the admin frontend or return a friendly
+ * response so the install / load does not fail.
+ */
+app.get("/", (req, res) => {
+  const shop = typeof req.query.shop === "string" ? req.query.shop.trim().toLowerCase() : "";
+  const hmac = typeof req.query.hmac === "string" ? req.query.hmac : "";
+  const host = typeof req.query.host === "string" ? req.query.host : "";
+  const hasShopifyParams = Boolean(
+    shop || hmac || host || req.query.session || req.query.timestamp
+  );
+
+  // Prefer an explicit frontend URL for embedded / admin UX
+  const frontendUrl =
+    process.env.ADMIN_FRONTEND_URL ||
+    process.env.FRONTEND_URL ||
+    (process.env.CORS_ORIGIN || "").split(",")[0]?.trim() ||
+    "https://admin.easybox.ke";
+
+  if (hasShopifyParams && shop) {
+    // Shopify is loading the app — redirect to the admin UI
+    const redirectTarget = `${frontendUrl.replace(/\/$/, "")}?shop=${encodeURIComponent(shop)}`;
+    return res.redirect(302, redirectTarget);
+  }
+
+  // Plain root hit (health probes, browsers, etc.)
+  res.status(200).json({
+    ok: true,
+    service: "zucchini-backend",
+    message: "Easybox API is running",
+  });
+});
+
+/**
+ * ============================================================
  * API ROUTES
  * ============================================================
  */

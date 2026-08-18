@@ -17,7 +17,8 @@
     "clear-orders": "ts-node --project scripts/tsconfig.json scripts/clear-orders.ts",
     "e2e": "ts-node --project scripts/tsconfig.json scripts/e2e-workflow.ts",
     "cleanup-legacy": "ts-node --project scripts/tsconfig.json scripts/cleanup-legacy-order-numbers.ts",
-    "migrate-legacy": "ts-node --project scripts/tsconfig.json scripts/migrate-legacy-orders.ts"
+    "migrate-legacy": "ts-node --project scripts/tsconfig.json scripts/migrate-legacy-orders.ts",
+    "start:no-seed": "prisma migrate deploy && node dist/server.js"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",

@@ -4,10 +4,13 @@ import { hashPassword } from "./utils/password";
 /**
  * Seeds:
  *  - Admin + Dispatcher accounts
- *  - Sample riders with phone + bcrypt password (RD001…)
+ *  - Sample riders with phone + bcrypt password
  *
  * Default password for all seeded accounts: ChangeMe123!
  * Change immediately after first login in production.
+ *
+ * In production, passwords are never printed to logs.
+ * Set SEED_VERBOSE=true to print credentials (local/dev only).
  */
 async function ensureUser(opts: {
   name: string;
@@ -30,11 +33,14 @@ async function ensureUser(opts: {
       riderId: opts.riderId,
     },
   });
-  console.log(`  Created ${opts.role}: ${opts.phone} / ${opts.password}`);
+  const verbose = process.env.SEED_VERBOSE === "true" || process.env.NODE_ENV !== "production";
+  if (verbose) {
+    console.log(`  Created ${opts.role}: ${opts.phone} / ${opts.password}`);
+  } else {
+    console.log(`  Created ${opts.role}: ${opts.phone}`);
+  }
   return user;
 }
-
-
 
 async function ensureRider(opts: {
   name: string;
@@ -57,26 +63,14 @@ async function ensureRider(opts: {
   }
 
   const rider = await prisma.rider.create({
-  data: {
-    name: opts.name,
-    phone: opts.phone,
-    vehicleType: opts.vehicleType || "Motorcycle",
-    branch: opts.branch || "Nairobi",
-    status: "AVAILABLE",
-  },
-});
-
-await ensureUser({
-  name: opts.name,
-  phone: opts.phone,
-  password: opts.password,
-  role: "RIDER",
-  riderId: rider.id,
-});
-
-console.log(`  Rider ${opts.name} (${opts.phone}) / ${opts.password}`);
-
-return rider;
+    data: {
+      name: opts.name,
+      phone: opts.phone,
+      vehicleType: opts.vehicleType || "Motorcycle",
+      branch: opts.branch || "Nairobi",
+      status: "AVAILABLE",
+    },
+  });
 
   await ensureUser({
     name: opts.name,
@@ -86,12 +80,24 @@ return rider;
     riderId: rider.id,
   });
 
-  console.log(`  Rider ${opts.name} (${opts.phone}) / ${opts.password}`);
+  const verbose = process.env.SEED_VERBOSE === "true" || process.env.NODE_ENV !== "production";
+  if (verbose) {
+    console.log(`  Rider ${opts.name} (${opts.phone}) / ${opts.password}`);
+  } else {
+    console.log(`  Rider ${opts.name} (${opts.phone})`);
+  }
+
   return rider;
 }
 
 async function main() {
-  const defaultPassword = "ChangeMe123!";
+  // Skip seeding entirely if explicitly disabled (recommended for production after first run)
+  if (process.env.SKIP_SEED === "true") {
+    console.log("SKIP_SEED=true — skipping seed.");
+    return;
+  }
+
+  const defaultPassword = process.env.SEED_DEFAULT_PASSWORD || "ChangeMe123!";
 
   console.log("Seeding admin & dispatcher…");
   await ensureUser({
@@ -132,9 +138,12 @@ async function main() {
 
   console.log("\nDone.");
   console.log("IMPORTANT: change all seeded passwords after first login in production.");
-  console.log("Admin:      0700000001 / ChangeMe123!");
-  console.log("Dispatcher: 0700000002 / ChangeMe123!");
-  console.log("Riders:     0711000001–0711000003 / ChangeMe123!");
+  // Never print plaintext passwords in production logs
+  if (process.env.SEED_VERBOSE === "true" || process.env.NODE_ENV !== "production") {
+    console.log(`Admin:      0700000001 / ${defaultPassword}`);
+    console.log(`Dispatcher: 0700000002 / ${defaultPassword}`);
+    console.log(`Riders:     0711000001–0711000003 / ${defaultPassword}`);
+  }
 }
 
 main()
