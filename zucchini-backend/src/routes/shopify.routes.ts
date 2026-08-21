@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { install, callback } from "../controllers/shopify.oauth.controller";
-import { getShopifyStatus, resyncWebhooks } from "../controllers/shopify.admin.controller";
+import { getShopifyStatus, resyncWebhooks, syncOrdersNow } from "../controllers/shopify.admin.controller";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 /**
@@ -26,5 +26,13 @@ router.get("/status", requireAuth, requireRole("ADMIN"), getShopifyStatus);
  * of redoing full OAuth install.
  */
 router.post("/resync-webhooks", requireAuth, requireRole("ADMIN"), resyncWebhooks);
+
+/**
+ * Pulls recent orders directly from the Shopify Admin API and
+ * imports any missing ones. Use this to backfill history — orders
+ * placed before install, or while the webhook pointed at a stale
+ * URL — without waiting for a new webhook event.
+ */
+router.post("/sync-orders", requireAuth, requireRole("ADMIN"), syncOrdersNow);
 
 export default router;

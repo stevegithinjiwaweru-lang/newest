@@ -5,7 +5,7 @@ import { env } from "../config/env";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { prisma } from "../lib/prisma";
 import { encryptSecret, timingSafeEqual } from "../utils/crypto";
-import { registerShopifyWebhooks } from "../services/shopify.service";
+import { registerShopifyWebhooks, backfillRecentOrders } from "../services/shopify.service";
 import { ShopifyAccessTokenResponse } from "../types/shopify";
 
 /**
@@ -211,6 +211,27 @@ export const callback = asyncHandler(async (req: Request, res: Response) => {
     console.warn("Failed to register Shopify webhooks", { shop, err: e?.message || String(e) });
   }
 
+  /**
+   * Import recent existing orders immediately on install/reconnect.
+   *
+   * Webhooks only cover orders created AFTER registration succeeds.
+   * Without this, a merchant installing (or reconnecting after a
+   * token/URL problem) would see zero Shopify orders until a brand
+   * new order was placed. This is best-effort and never fails
+   * install — a failed backfill just means the merchant relies on
+   * the webhook going forward, or can retry via
+   * POST /api/shopify/resync-webhooks.
+   */
+  let importedOnInstall = 0;
+  try {
+    importedOnInstall = await backfillRecentOrders(merchant);
+  } catch (e: any) {
+    console.warn("Failed to backfill recent Shopify orders on install", {
+      shop,
+      err: e?.message || String(e),
+    });
+  }
+
   // Clear state cookie
   res.clearCookie("shopify_oauth_state");
 
@@ -218,5 +239,6 @@ export const callback = asyncHandler(async (req: Request, res: Response) => {
     ok: true,
     message: "Shopify app installed",
     merchant: { id: merchant.id, shop: merchant.shopifyShopDomain },
+    importedOnInstall,
   });
 });

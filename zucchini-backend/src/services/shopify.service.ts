@@ -600,3 +600,85 @@ export async function backfillRecentOrders(
 
   return imported;
 }
+
+/**
+ * ============================================================
+ * AUTO-HEAL: SELF-CORRECTING WEBHOOK + ORDER SYNC AT BOOT
+ * ============================================================
+ *
+ * Railway's public backend URL has changed multiple times on this
+ * project. Every time that happens, Shopify keeps sending
+ * orders/create webhooks to the OLD dead URL until someone
+ * manually calls resync-webhooks — and any orders missed in the
+ * meantime are lost unless someone also calls sync-orders.
+ *
+ * This runs once, automatically, whenever the backend process
+ * starts (see server.ts). For every connected merchant it:
+ *
+ *   1. Compares Shopify's registered orders/create webhook address
+ *      against this deployment's CURRENT expected address.
+ *   2. Re-registers it if missing or pointing at a stale URL.
+ *   3. Pulls the last 50 orders and imports any missing ones
+ *      (idempotent — matches by externalId, so already-imported
+ *      orders are skipped).
+ *
+ * Fully best-effort: never throws, never blocks server startup,
+ * and a failure for one merchant does not affect others. Every
+ * outcome is logged so it's visible in Railway logs.
+ */
+export async function autoHealShopifyIntegration(): Promise<void> {
+  const expectedAddress = `${(env.publicBackendUrl || env.shopifyAppUrl || "").replace(/\/$/, "")}/api/shopify/webhooks/orders-create`;
+
+  if (!env.publicBackendUrl && !env.shopifyAppUrl) {
+    console.warn(
+      "Shopify auto-heal skipped: neither PUBLIC_BACKEND_URL nor SHOPIFY_APP_URL is set."
+    );
+    return;
+  }
+
+  let merchants: Awaited<ReturnType<typeof prisma.merchant.findMany>>;
+  try {
+    merchants = await prisma.merchant.findMany({
+      where: { shopifyShopDomain: { not: null }, shopifyAccessTokenEnc: { not: null } },
+    });
+  } catch (e: any) {
+    console.warn("Shopify auto-heal skipped: could not query merchants", e?.message || String(e));
+    return;
+  }
+
+  for (const merchant of merchants) {
+    const shop = merchant.shopifyShopDomain as string;
+    try {
+      const accessToken = await getValidShopifyAccessToken({
+        id: merchant.id,
+        shopifyShopDomain: merchant.shopifyShopDomain,
+        shopifyAccessTokenEnc: merchant.shopifyAccessTokenEnc,
+        shopifyAccessTokenExpiresAt: merchant.shopifyAccessTokenExpiresAt,
+        shopifyRefreshTokenEnc: merchant.shopifyRefreshTokenEnc,
+        shopifyRefreshTokenExpiresAt: merchant.shopifyRefreshTokenExpiresAt,
+      });
+
+      const webhooks = await getRegisteredShopifyWebhooks(shop, accessToken);
+      const matches = webhooks.some(
+        (w) => w.topic === "orders/create" && w.address === expectedAddress
+      );
+
+      if (!matches) {
+        console.warn(
+          `Shopify auto-heal: ${shop} webhook does not match current backend (${expectedAddress}). Re-registering...`
+        );
+        await registerShopifyWebhooks(shop, accessToken);
+        console.log(`Shopify auto-heal: ${shop} webhook re-registered.`);
+      } else {
+        console.log(`Shopify auto-heal: ${shop} webhook already correct.`);
+      }
+
+      const imported = await backfillRecentOrders(merchant);
+      if (imported > 0) {
+        console.log(`Shopify auto-heal: ${shop} imported ${imported} missing order(s).`);
+      }
+    } catch (e: any) {
+      console.warn(`Shopify auto-heal failed for ${shop}:`, e?.message || String(e));
+    }
+  }
+}

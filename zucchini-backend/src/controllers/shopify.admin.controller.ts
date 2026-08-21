@@ -7,6 +7,7 @@ import { AuthedRequest } from "../middleware/auth";
 import {
   getRegisteredShopifyWebhooks,
   registerShopifyWebhooks,
+  backfillRecentOrders,
 } from "../services/shopify.service";
 import { getValidShopifyAccessToken } from "../services/shopify.token";
 
@@ -118,6 +119,54 @@ export const getShopifyStatus = asyncHandler(async (_req: AuthedRequest, res: Re
     expectedWebhookAddress: expectedAddress,
     merchants: results,
   });
+});
+
+/**
+ * ============================================================
+ * POST /api/shopify/sync-orders
+ * ============================================================
+ *
+ * Pulls the most recent orders directly from the Shopify Admin API
+ * (orders.json?status=any&limit=50) and imports any that are
+ * missing, using the existing idempotent importShopifyOrder logic
+ * (matches by externalId, so this is always safe to re-run).
+ *
+ * Use this to recover orders that were placed before install, or
+ * placed while the webhook was pointing at a stale backend URL.
+ * Body: { merchantId } to target one merchant, or omit for all
+ * connected merchants.
+ */
+export const syncOrdersNow = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const { merchantId } = req.body || {};
+
+  const merchants = await prisma.merchant.findMany({
+    where: {
+      shopifyShopDomain: { not: null },
+      shopifyAccessTokenEnc: { not: null },
+      ...(merchantId ? { id: merchantId } : {}),
+    },
+  });
+
+  if (merchants.length === 0) {
+    throw new ApiError(404, "No connected Shopify merchant found to sync");
+  }
+
+  const results = [];
+  for (const merchant of merchants) {
+    try {
+      const imported = await backfillRecentOrders(merchant);
+      results.push({ merchantId: merchant.id, shopDomain: merchant.shopifyShopDomain, ok: true, imported });
+    } catch (e: any) {
+      results.push({
+        merchantId: merchant.id,
+        shopDomain: merchant.shopifyShopDomain,
+        ok: false,
+        error: e?.message || String(e),
+      });
+    }
+  }
+
+  res.json({ ok: true, results });
 });
 
 /**

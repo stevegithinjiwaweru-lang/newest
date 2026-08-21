@@ -2,6 +2,7 @@ import http from "http";
 import app from "./app";
 import { initSocket } from "./socket";
 import { env } from "./config/env";
+import { autoHealShopifyIntegration } from "./services/shopify.service";
 
 const server = http.createServer(app);
 initSocket(server);
@@ -54,4 +55,19 @@ server.listen(env.port, host, () => {
         "and PUBLIC_BACKEND_URL in Railway → Variables to match the current domain, then reinstall the app on the test store."
     );
   }
+
+  /**
+   * ============================================================
+   * SHOPIFY AUTO-HEAL (startup-only, non-fatal)
+   * ============================================================
+   *
+   * Actively fixes the root cause behind this: re-registers any
+   * stale/missing webhook against the CURRENT backend URL and
+   * imports any orders that were missed while it was stale. Runs
+   * once per boot, in the background — does not delay startup or
+   * crash the process if Shopify/DB is unreachable.
+   */
+  autoHealShopifyIntegration().catch((e: any) => {
+    console.warn("Shopify auto-heal encountered an unexpected error:", e?.message || String(e));
+  });
 });

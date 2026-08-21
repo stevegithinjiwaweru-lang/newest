@@ -283,9 +283,24 @@ app.get("/", (req, res) => {
     "https://admin.easybox.ke";
 
   if (hasShopifyParams && shop) {
-    // Shopify is loading the app — redirect to the admin UI
-    const redirectTarget = `${frontendUrl.replace(/\/$/, "")}?shop=${encodeURIComponent(shop)}`;
-    return res.redirect(302, redirectTarget);
+    /**
+     * Shopify is loading the embedded app. App Bridge (running in the
+     * browser, inside the Shopify Admin iframe) needs BOTH `shop` and
+     * `host` to initialize correctly — `host` is the base64-encoded
+     * admin URL App Bridge uses to talk back to Shopify. Dropping it
+     * here does not affect whether Shopify *orders* are visible (the
+     * Orders/Dispatch API is not shop-scoped), but it does break
+     * correct embedding/App Bridge behavior inside Shopify Admin, so
+     * we forward it along with `shop`.
+     *
+     * `hmac`, `session`, and `timestamp` are one-time signed values
+     * for THIS request only — they are not meant to be reused by the
+     * frontend and are intentionally not forwarded.
+     */
+    const redirectUrl = new URL(frontendUrl.replace(/\/$/, ""));
+    redirectUrl.searchParams.set("shop", shop);
+    if (host) redirectUrl.searchParams.set("host", host);
+    return res.redirect(302, redirectUrl.toString());
   }
 
   // Plain root hit (health probes, browsers, etc.)
