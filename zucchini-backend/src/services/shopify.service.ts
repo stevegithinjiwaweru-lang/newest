@@ -208,6 +208,40 @@ export async function registerShopifyWebhooks(
 
 /**
  * ============================================================
+ * GET REGISTERED SHOPIFY WEBHOOKS
+ * ============================================================
+ *
+ * Read-only lookup used by the /api/shopify/status diagnostic
+ * endpoint. Does NOT create/delete anything.
+ */
+export async function getRegisteredShopifyWebhooks(
+  shopDomain: string,
+  accessToken: string
+): Promise<Array<{ id: number; topic: string; address: string }>> {
+  const resp = await fetch(adminUrl(shopDomain, "/webhooks.json"), {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": accessToken,
+    },
+  });
+
+  if (!resp.ok) {
+    throw new ApiError(
+      400,
+      `Failed to retrieve Shopify webhooks (${resp.status})`
+    );
+  }
+
+  const data = (await resp.json()) as {
+    webhooks?: Array<{ id: number; topic: string; address: string }>;
+  };
+
+  return data.webhooks || [];
+}
+
+/**
+ * ============================================================
  * TEST SHOPIFY CREDENTIALS
  * ============================================================
  */

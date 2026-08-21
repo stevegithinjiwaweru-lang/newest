@@ -105,11 +105,11 @@ model Merchant {
   status                       MerchantStatus @default(DISCONNECTED)
   shopifyShopDomain            String?        @unique
   shopifyAccessTokenEnc        String?
-  /** When the current offline access token expires (expiring offline tokens). */
+  /// When the current offline access token expires (expiring offline tokens).
   shopifyAccessTokenExpiresAt  DateTime?
-  /** Encrypted refresh token used to rotate expiring offline access tokens. */
+  /// Encrypted refresh token used to rotate expiring offline access tokens.
   shopifyRefreshTokenEnc       String?
-  /** When the refresh token itself expires (~90 days). */
+  /// When the refresh token itself expires (~90 days).
   shopifyRefreshTokenExpiresAt DateTime?
   shopifyWebhookSecret         String?
   lastSyncAt                   DateTime?
