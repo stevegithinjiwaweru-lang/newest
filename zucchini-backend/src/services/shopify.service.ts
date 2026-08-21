@@ -227,8 +227,12 @@ export async function getRegisteredShopifyWebhooks(
   });
 
   if (!resp.ok) {
+    // Preserve the REAL status Shopify returned (401/403 = bad/deprecated/
+    // revoked token or missing scope; do not collapse this to a generic 400
+    // — callers (autoHealShopifyIntegration) rely on the true status to
+    // distinguish "needs re-auth" from a transient failure).
     throw new ApiError(
-      400,
+      resp.status,
       `Failed to retrieve Shopify webhooks (${resp.status})`
     );
   }
@@ -678,7 +682,27 @@ export async function autoHealShopifyIntegration(): Promise<void> {
         console.log(`Shopify auto-heal: ${shop} imported ${imported} missing order(s).`);
       }
     } catch (e: any) {
-      console.warn(`Shopify auto-heal failed for ${shop}:`, e?.message || String(e));
+      /**
+       * A 401/403 here means Shopify rejected the stored token itself
+       * (deprecated/revoked/expired offline token, or the app losing the
+       * scopes it was granted at install) — no amount of retrying on the
+       * next boot will fix that; only a fresh OAuth install can. Surface
+       * that distinctly and with the concrete remediation step, instead of
+       * repeating the same opaque "auto-heal failed" warning every
+       * deployment. Anything else (network blip, Shopify outage, DB
+       * hiccup) is left as a transient warning, since it may self-resolve.
+       */
+      const status = e?.status;
+      if (status === 401 || status === 403) {
+        console.warn(
+          `Shopify auto-heal: ${shop} needs re-authorization — Shopify rejected the stored access token ` +
+            `(HTTP ${status}, likely a deprecated/revoked/expired offline token). ` +
+            `Re-run OAuth install for this shop: GET /api/shopify/install?shop=${shop} ` +
+            `(check GET /api/shopify/status first — "legacyNonExpiringToken": true confirms this).`
+        );
+      } else {
+        console.warn(`Shopify auto-heal failed for ${shop}:`, e?.message || String(e));
+      }
     }
   }
 }
