@@ -3,3 +3,10 @@ dist
 .env
 .env.local
 *.log
+
+# Environment files
+.env.*
+!.env.example
+
+# macOS
+.DS_Store

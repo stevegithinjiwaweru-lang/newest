@@ -101,13 +101,13 @@ export default function DispatchOrderUpload() {
         >
           <Input placeholder="Your own order reference number" />
         </Form.Item>
-        <Form.Item name="customerName" label="Customer name" rules={[{ required: true }]}> 
+        <Form.Item name="customerName" label="Customer name" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item name="phone" label="Phone" rules={[{ required: true }]}> 
+        <Form.Item name="phone" label="Phone" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item name="address" label="Address" rules={[{ required: true }]}> 
+        <Form.Item name="address" label="Address" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
         <Form.Item>

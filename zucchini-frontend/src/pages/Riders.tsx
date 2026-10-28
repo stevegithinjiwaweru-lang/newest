@@ -475,10 +475,10 @@ const Riders: React.FC = () => {
 
       <Modal open={!!editRider} title="Edit Rider" onCancel={() => setEditRider(null)} footer={null}>
         <Form form={editForm} onFinish={submitEdit} layout="vertical">
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}> 
+          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="phone" label="Phone"> 
+          <Form.Item name="phone" label="Phone">
             <Input />
           </Form.Item>
           <Form.Item>

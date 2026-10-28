@@ -1,0 +1,40 @@
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated files
+node_modules/
+dist/
+build/
+coverage/
+
+# Local files and backups
+.DS_Store
+*.log
+*.zip
+
+# Private keys and certificates
+*.pem
+*.key
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated files
+node_modules/
+dist/
+build/
+coverage/
+
+# Local files and backups
+.DS_Store
+*.log
+*.zip
+
+# Private keys and certificates
+*.pem
+*.key
